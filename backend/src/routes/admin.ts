@@ -54,6 +54,16 @@ const tipSchema = z.object({
 
 const tipPatchSchema = tipSchema.partial();
 
+function utcDayRange(date: Date): { from: Date; to: Date } {
+  const from = new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 0, 0, 0, 0)
+  );
+  const to = new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 23, 59, 59, 999)
+  );
+  return { from, to };
+}
+
 adminRouter.get("/tips", async (_req, res, next) => {
   try {
     const tips = await Tip.find().sort({ kickoffAt: -1 }).limit(300);
@@ -69,15 +79,43 @@ adminRouter.get("/tips", async (_req, res, next) => {
 adminRouter.post("/tips", async (req, res, next) => {
   try {
     const body = tipSchema.parse(req.body);
+    const kickoffAt = new Date(body.kickoffAt);
+    const product = body.product ?? "odds10";
+    const { from, to } = utcDayRange(kickoffAt);
+    const sibling = await Tip.findOne({
+      product,
+      kickoffAt: { $gte: from, $lte: to },
+      bookingCode: { $nin: ["", null] },
+    }).sort({ kickoffAt: 1 });
     const tip = await Tip.create({
       ...body,
-      kickoffAt: new Date(body.kickoffAt),
+      kickoffAt,
       status: body.status ?? "pending",
-      product: body.product ?? "odds10",
+      product,
       isVip: body.isVip ?? true,
-      bookingCode: body.bookingCode ?? "",
+      bookingCode: body.bookingCode || sibling?.bookingCode || "",
     });
     res.status(201).json({ id: tip._id.toString(), product: tip.product });
+  } catch (err) {
+    next(err);
+  }
+});
+
+adminRouter.patch("/boards/booking", async (req, res, next) => {
+  try {
+    const body = z
+      .object({
+        product: z.enum(SLIP_PRODUCT_IDS),
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        bookingCode: z.string().trim().max(80),
+      })
+      .parse(req.body);
+    const { from, to } = utcDayRange(new Date(`${body.date}T12:00:00.000Z`));
+    const result = await Tip.updateMany(
+      { product: body.product, kickoffAt: { $gte: from, $lte: to } },
+      { $set: { bookingCode: body.bookingCode } }
+    );
+    res.json({ updated: result.modifiedCount, bookingCode: body.bookingCode });
   } catch (err) {
     next(err);
   }

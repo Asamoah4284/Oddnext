@@ -33,11 +33,7 @@ function ResultChip({ status }: { status: Tip["status"] }) {
       </span>
     );
   }
-  return (
-    <span className="rounded-full bg-white/5 px-2.5 py-1 text-xs font-semibold text-mute">
-      Pending
-    </span>
-  );
+  return null;
 }
 
 export function TipsTable({ initial }: { initial: TipsResponse }) {

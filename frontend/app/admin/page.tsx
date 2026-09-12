@@ -63,9 +63,12 @@ const emptyTip = {
   odds: "1.50",
   product: "odds10" as SlipProductId,
   isVip: true,
-  bookingCode: "",
   status: "pending" as AdminTip["status"],
 };
+
+function tipDay(iso: string): string {
+  return new Date(iso).toISOString().slice(0, 10);
+}
 
 function Field({
   label,
@@ -92,6 +95,8 @@ export default function AdminPage() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
+  const [bookingDrafts, setBookingDrafts] = useState<Record<string, string>>({});
+  const [bookingBusy, setBookingBusy] = useState("");
 
   function dropStaleSession() {
     logout();
@@ -163,7 +168,6 @@ export default function AdminPage() {
       odds: String(tip.odds),
       product: tip.product || "odds10",
       isVip: tip.isVip,
-      bookingCode: tip.bookingCode,
       status: tip.status,
     });
     setFormOpen(true);
@@ -187,6 +191,29 @@ export default function AdminPage() {
     }
   }
 
+  async function saveBoardBooking(product: SlipProductId, date: string) {
+    if (!token) return;
+    const key = `${product}|${date}`;
+    setBookingBusy(key);
+    setError("");
+    try {
+      await apiFetch("/api/admin/boards/booking", {
+        method: "PATCH",
+        token,
+        body: JSON.stringify({
+          product,
+          date,
+          bookingCode: (bookingDrafts[key] ?? "").trim(),
+        }),
+      });
+      await loadTips();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save booking code");
+    } finally {
+      setBookingBusy("");
+    }
+  }
+
   async function deleteTip(id: string) {
     if (!token || !window.confirm("Delete this tip?")) return;
     try {
@@ -206,11 +233,51 @@ export default function AdminPage() {
       ? tips
       : tips.filter((tip) => (tip.product || "odds10") === boardFilter);
 
-  const tipPages = Math.max(1, Math.ceil(visibleTips.length / PAGE_SIZE));
-  const pagedTips = useMemo(() => {
+  const slipGroups = useMemo(() => {
+    const groups: {
+      key: string;
+      product: SlipProductId;
+      date: string;
+      code: string;
+      tips: AdminTip[];
+    }[] = [];
+    const index = new Map<string, number>();
+    const ordered = [...visibleTips].sort((a, b) => {
+      const board = (a.product || "odds10").localeCompare(b.product || "odds10");
+      if (board !== 0) return board;
+      const day = tipDay(b.kickoffAt).localeCompare(tipDay(a.kickoffAt));
+      if (day !== 0) return day;
+      return new Date(a.kickoffAt).getTime() - new Date(b.kickoffAt).getTime();
+    });
+    for (const tip of ordered) {
+      const product = (tip.product || "odds10") as SlipProductId;
+      const date = tipDay(tip.kickoffAt);
+      const key = `${product}|${date}`;
+      const existing = index.get(key);
+      if (existing === undefined) {
+        index.set(key, groups.length);
+        groups.push({
+          key,
+          product,
+          date,
+          code: tip.bookingCode || "",
+          tips: [tip],
+        });
+      } else {
+        groups[existing].tips.push(tip);
+        if (!groups[existing].code && tip.bookingCode) {
+          groups[existing].code = tip.bookingCode;
+        }
+      }
+    }
+    return groups;
+  }, [visibleTips]);
+
+  const tipPages = Math.max(1, Math.ceil(slipGroups.length / PAGE_SIZE));
+  const pagedGroups = useMemo(() => {
     const start = (tipsPage - 1) * PAGE_SIZE;
-    return visibleTips.slice(start, start + PAGE_SIZE);
-  }, [visibleTips, tipsPage]);
+    return slipGroups.slice(start, start + PAGE_SIZE);
+  }, [slipGroups, tipsPage]);
 
   useEffect(() => {
     setTipsPage(1);
@@ -341,13 +408,6 @@ export default function AdminPage() {
                   />
                 </Field>
               </div>
-              <Field label="Booking code">
-                <input
-                  className="field"
-                  value={form.bookingCode}
-                  onChange={(e) => setForm({ ...form, bookingCode: e.target.value })}
-                />
-              </Field>
               <Field label="Result">
                 <select
                   className="field"
@@ -414,60 +474,109 @@ export default function AdminPage() {
                 ))}
               </div>
               <div>
-                {pagedTips.map((tip) => (
-                  <div
-                    key={tip.id}
-                    className="flex items-start justify-between gap-3 border-t border-line px-4 py-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="font-semibold">
-                        {tip.homeTeam} vs {tip.awayTeam}
-                      </p>
-                      <p className="mt-0.5 text-xs text-mute">
-                        {tip.league} · {formatDateTime(tip.kickoffAt)}
-                      </p>
-                      <p className="mt-1 text-sm">
-                        <span className="text-star">
-                          {productLabel(tip.product || "odds10")}
-                        </span>
-                        <span className="text-mute"> · </span>
-                        {tip.prediction} @ {tip.odds}
-                        {tip.bookingCode ? ` · ${tip.bookingCode}` : ""}
-                      </p>
-                      <p className="mt-1 text-xs capitalize text-mute">{tip.status}</p>
-                    </div>
-                    <HamburgerMenu label={`Actions for ${tip.homeTeam} vs ${tip.awayTeam}`}>
-                      <MenuItem
-                        onClick={() => void patchTip(tip.id, { status: "pending" })}
-                      >
-                        Mark pending
-                      </MenuItem>
-                      <MenuItem
-                        onClick={() => void patchTip(tip.id, { status: "won" })}
-                      >
-                        Mark won
-                      </MenuItem>
-                      <MenuItem
-                        onClick={() => void patchTip(tip.id, { status: "lost" })}
-                      >
-                        Mark lost
-                      </MenuItem>
-                      <MenuItem onClick={() => editTip(tip)}>Edit</MenuItem>
-                      <MenuItem tone="danger" onClick={() => void deleteTip(tip.id)}>
-                        Delete
-                      </MenuItem>
-                    </HamburgerMenu>
-                  </div>
-                ))}
-                {pagedTips.length === 0 && (
+                {pagedGroups.map((group) => {
+                  const draft = bookingDrafts[group.key] ?? group.code;
+                  return (
+                    <section key={group.key} className="border-t border-line">
+                      <div className="flex items-center justify-between gap-3 bg-paper/80 px-4 py-2.5">
+                        <p className="text-sm font-semibold">
+                          {productLabel(group.product)}
+                        </p>
+                        <p className="text-xs text-mute">{group.date}</p>
+                      </div>
+                      {group.tips.map((tip) => (
+                        <div
+                          key={tip.id}
+                          className="flex items-start justify-between gap-3 border-t border-line px-4 py-3"
+                        >
+                          <div className="min-w-0">
+                            <p className="font-semibold">
+                              {tip.homeTeam} vs {tip.awayTeam}
+                            </p>
+                            <p className="mt-0.5 text-xs text-mute">
+                              {tip.league} · {formatDateTime(tip.kickoffAt)}
+                            </p>
+                            <p className="mt-1 text-sm">
+                              {tip.prediction} @ {tip.odds}
+                            </p>
+                            {tip.status !== "pending" && (
+                              <p
+                                className={`mt-1 text-xs font-semibold capitalize ${
+                                  tip.status === "won" ? "text-won" : "text-lost"
+                                }`}
+                              >
+                                {tip.status}
+                              </p>
+                            )}
+                          </div>
+                          <HamburgerMenu
+                            label={`Actions for ${tip.homeTeam} vs ${tip.awayTeam}`}
+                          >
+                            <MenuItem
+                              onClick={() => void patchTip(tip.id, { status: "pending" })}
+                            >
+                              Mark pending
+                            </MenuItem>
+                            <MenuItem
+                              onClick={() => void patchTip(tip.id, { status: "won" })}
+                            >
+                              Mark won
+                            </MenuItem>
+                            <MenuItem
+                              onClick={() => void patchTip(tip.id, { status: "lost" })}
+                            >
+                              Mark lost
+                            </MenuItem>
+                            <MenuItem onClick={() => editTip(tip)}>Edit</MenuItem>
+                            <MenuItem
+                              tone="danger"
+                              onClick={() => void deleteTip(tip.id)}
+                            >
+                              Delete
+                            </MenuItem>
+                          </HamburgerMenu>
+                        </div>
+                      ))}
+                      <div className="border-t border-fire/20 bg-fire/5 px-4 py-3">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-fire">
+                          Booking code for this slip
+                        </p>
+                        <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                          <input
+                            className="field"
+                            placeholder="One SportyBet code under all these odds"
+                            value={draft}
+                            onChange={(e) =>
+                              setBookingDrafts((current) => ({
+                                ...current,
+                                [group.key]: e.target.value,
+                              }))
+                            }
+                          />
+                          <button
+                            type="button"
+                            className="btn-outline shrink-0 px-4 py-2 text-sm"
+                            disabled={bookingBusy === group.key}
+                            onClick={() =>
+                              void saveBoardBooking(group.product, group.date)
+                            }
+                          >
+                            {bookingBusy === group.key ? "Saving…" : "Save code"}
+                          </button>
+                        </div>
+                      </div>
+                    </section>
+                  );
+                })}
+                {pagedGroups.length === 0 && (
                   <p className="px-4 py-8 text-sm text-mute">No games on this board.</p>
                 )}
               </div>
               <Pager
                 page={tipsPage}
                 pages={tipPages}
-                total={visibleTips.length}
-                noun={visibleTips.length === 1 ? "game" : "games"}
+                total={slipGroups.length}
+                noun={slipGroups.length === 1 ? "slip" : "slips"}
                 onPage={setTipsPage}
               />
             </div>
