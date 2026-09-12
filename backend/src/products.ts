@@ -1,5 +1,5 @@
 export const SLIP_PRODUCTS = [
-  { id: "odds10", label: "10 odds", priceGhs: 30 },
+  { id: "odds10", label: "10 odds", priceGhs: 0.5 },
   { id: "odds50", label: "50 odds", priceGhs: 80 },
   { id: "odds100", label: "100+ odds", priceGhs: 100 },
   { id: "draw", label: "Draw games", priceGhs: 80 },

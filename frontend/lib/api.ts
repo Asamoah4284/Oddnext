@@ -4,13 +4,24 @@ import type { SiteStats, TipsResponse } from "./types";
 function envUrl(value: string | undefined, fallback: string): string {
   const trimmed = value?.trim();
   if (trimmed) return trimmed.replace(/\/$/, "");
-  const vercel = process.env.VERCEL_URL?.trim();
-  if (vercel) return vercel.startsWith("http") ? vercel.replace(/\/$/, "") : `https://${vercel}`;
   return fallback;
 }
 
-export const API_URL = envUrl(process.env.NEXT_PUBLIC_API_URL, "http://localhost:4000");
-export const SITE_URL = envUrl(process.env.NEXT_PUBLIC_SITE_URL, "http://localhost:3000");
+function siteUrl(): string {
+  const configured = envUrl(process.env.NEXT_PUBLIC_SITE_URL, "");
+  if (configured) return configured;
+  const vercel = process.env.VERCEL_URL?.trim();
+  if (vercel) {
+    return vercel.startsWith("http") ? vercel.replace(/\/$/, "") : `https://${vercel}`;
+  }
+  return "http://localhost:3000";
+}
+
+export const API_URL = envUrl(
+  process.env.NEXT_PUBLIC_API_URL,
+  "http://localhost:4000"
+);
+export const SITE_URL = siteUrl();
 export const BRAND_NAME = process.env.NEXT_PUBLIC_BRAND_NAME?.trim() || "Oddnext";
 export const TOKEN_KEY = "oddnext_token";
 export const AUTH_EXPIRED_EVENT = "oddnext:auth-expired";
