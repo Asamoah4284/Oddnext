@@ -1,11 +1,17 @@
 import type { SlipProductId } from "./products";
 import type { SiteStats, TipsResponse } from "./types";
 
-export const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
-export const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-export const BRAND_NAME = process.env.NEXT_PUBLIC_BRAND_NAME ?? "Oddnext";
+function envUrl(value: string | undefined, fallback: string): string {
+  const trimmed = value?.trim();
+  if (trimmed) return trimmed.replace(/\/$/, "");
+  const vercel = process.env.VERCEL_URL?.trim();
+  if (vercel) return vercel.startsWith("http") ? vercel.replace(/\/$/, "") : `https://${vercel}`;
+  return fallback;
+}
+
+export const API_URL = envUrl(process.env.NEXT_PUBLIC_API_URL, "http://localhost:4000");
+export const SITE_URL = envUrl(process.env.NEXT_PUBLIC_SITE_URL, "http://localhost:3000");
+export const BRAND_NAME = process.env.NEXT_PUBLIC_BRAND_NAME?.trim() || "Oddnext";
 export const TOKEN_KEY = "oddnext_token";
 export const AUTH_EXPIRED_EVENT = "oddnext:auth-expired";
 
@@ -50,7 +56,7 @@ export async function apiFetch<T>(
       0,
       aborted
         ? "The payment server took too long. Try again."
-        : "Cannot reach the API. Confirm it is running on port 4000."
+        : "Cannot reach the API. Check that the site is connected to the live server."
     );
   }
 

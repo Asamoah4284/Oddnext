@@ -1,6 +1,6 @@
 # Oddnext
 
-Sports betting predictions platform for Ghana and Nigeria: daily free football tips, a GHS 40 VIP tier, JWT auth, an admin CMS, and Moolre checkout.
+Sports betting predictions platform for Ghana and Nigeria: priced odds boards, VIP all-access, admin-only login, and Moolre Mobile Money checkout.
 
 ## Stack
 
@@ -85,26 +85,80 @@ The API never upgrades VIP from the webhook or redirect alone. It re-checks `POS
 
 Sandbox: `MOOLRE_BASE_URL=https://sandbox.moolre.com`.
 
-## Deploy
+## Deploy (Vercel + Render + Atlas)
 
-### MongoDB Atlas
+GitHub repo: `https://github.com/Asamoah4284/Oddnext.git`. Push `main`, then connect that repo to Render and Vercel. Never upload `.env` files.
 
-Create a cluster, allow the Render outbound IP (or `0.0.0.0/0` while testing), and paste the URI into `MONGODB_URI`.
+### 1. MongoDB Atlas
 
-### Backend (Render)
+You can keep using the existing `oddnext` database.
 
-- Root: `backend`
-- Build: `npm install && npm run build`
-- Start: `npm start`
-- Env: all `backend/.env.example` keys, plus `FRONTEND_URL=https://<vercel-domain>` and `NODE_ENV=production`
+1. Atlas → Network Access → allow `0.0.0.0/0` (or Render’s outbound IPs).
+2. Atlas → Database Access → a user that can read/write `oddnext`.
+3. Copy the `mongodb+srv://…` URI (database name `/oddnext`).
 
-### Frontend (Vercel)
+### 2. Backend on Render
 
-- Root: `frontend`
-- Env:
-  - `NEXT_PUBLIC_API_URL=https://<render-api>`
-  - `NEXT_PUBLIC_SITE_URL=https://<vercel-domain>`
-  - `NEXT_PUBLIC_BRAND_NAME=Oddnext`
+1. [Render Dashboard](https://dashboard.render.com) → New → Blueprint, or New Web Service from this repo.
+2. If you create the service manually:
+   - **Root Directory:** `backend`
+   - **Build:** `npm install --include=dev && npm run build`
+   - **Start:** `npm start`
+   - **Health check:** `/api/health`
+3. Environment variables (same values as local `backend/.env`, except URLs):
+
+| Key | Production value |
+| --- | --- |
+| `NODE_ENV` | `production` |
+| `MONGODB_URI` | Atlas URI |
+| `JWT_SECRET` | long random string (not the local one) |
+| `FRONTEND_URL` | `https://<your-vercel-domain>` (no trailing slash) |
+| `MOOLRE_USERNAME` / `MOOLRE_API_USER` | Moolre user |
+| `MOOLRE_PUBLIC_KEY` | Moolre public key |
+| `MOOLRE_ACCOUNT_NUMBER` | Moolre account |
+| `MOOLRE_API_KEY` | Moolre API key |
+| `MOOLRE_WEBHOOK_SECRET` | same secret Moolre will send |
+| `MOOLRE_SENDER_ID` | approved SMS sender |
+| `MOOLRE_BASE_URL` | `https://api.moolre.com` |
+| `ADMIN_EMAIL` | `admin@system.com` |
+| `ADMIN_PASSWORD` | strong admin password |
+
+4. Deploy, then open `https://<render-service>.onrender.com/api/health`. You should see `{ "ok": true, "service": "oddnext-api" }`.
+
+The free Render web service sleeps after idle time. The first request after sleep can take ~30–60s.
+
+### 3. Frontend on Vercel
+
+1. [Vercel](https://vercel.com) → Add New Project → import `Asamoah4284/Oddnext`.
+2. **Root Directory:** `frontend`.
+3. Environment variables (set these **before** the first production build):
+
+| Key | Production value |
+| --- | --- |
+| `NEXT_PUBLIC_API_URL` | `https://<render-service>.onrender.com` (no `/api`, no trailing slash) |
+| `NEXT_PUBLIC_SITE_URL` | `https://<your-vercel-domain>` |
+| `NEXT_PUBLIC_BRAND_NAME` | `Oddnext` |
+
+4. Deploy. If you change `NEXT_PUBLIC_*` later, trigger a new Vercel deploy so the values are baked in.
+
+If you created the Vercel project first and do not know the final URL yet: deploy the API with a temporary `FRONTEND_URL`, deploy the site, then set the real `FRONTEND_URL` on Render and redeploy the API.
+
+### 4. Moolre
+
+In the Moolre dashboard, set the payment webhook to:
+
+`https://<render-service>.onrender.com/api/payments/webhook`
+
+Customer return URL is already built by the API:
+
+`https://<your-vercel-domain>/payment/return?reference=<externalRef>`
+
+### 5. Smoke test
+
+- Home and Live tips load.
+- Pay with a real MoMo number completes and shows the slip.
+- `/admin` still works with the production admin password.
+- Atlas has new `payments` / `users` after a test purchase.
 
 ## Product notes
 

@@ -14,13 +14,15 @@ import { ensureAdmin, seedIfEmpty } from "./scripts/seed.js";
 
 const app = express();
 
+const frontendOrigin = config.frontendUrl.replace(/\/$/, "");
+
 app.set("trust proxy", 1);
 app.use(helmet());
 app.use(
   cors({
     origin: config.isDev
       ? true
-      : [config.frontendUrl, "http://localhost:3000", "http://127.0.0.1:3000"],
+      : [frontendOrigin, "http://localhost:3000", "http://127.0.0.1:3000"],
     credentials: true,
   })
 );
@@ -62,7 +64,7 @@ async function start(): Promise<void> {
     await seedIfEmpty();
   }
   await ensureAdmin();
-  app.listen(config.port, () => {
+  app.listen(config.port, "0.0.0.0", () => {
     console.log(`Oddnext API listening on ${config.port}`);
   });
 }
