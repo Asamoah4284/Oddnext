@@ -18,6 +18,7 @@ export type PaymentVerify = {
   reference?: string;
   product?: string;
   smsSent?: boolean;
+  slipViewed?: boolean;
   createdAt?: string;
   tips?: PaidTip[];
 };
@@ -60,13 +61,10 @@ export function fetchLatestPayment(token: string) {
   return apiFetch<PaymentVerify>("/api/payments/latest", { token });
 }
 
-export function isFreshPayment(createdAt?: string) {
-  if (!createdAt) return false;
-  const created = new Date(createdAt);
-  const now = new Date();
-  return (
-    created.getFullYear() === now.getFullYear() &&
-    created.getMonth() === now.getMonth() &&
-    created.getDate() === now.getDate()
-  );
+export function ackSlip(reference: string, token: string | null) {
+  if (!reference || !token) return Promise.resolve();
+  return apiFetch("/api/payments/ack/" + reference, {
+    method: "POST",
+    token,
+  }).catch(() => undefined);
 }

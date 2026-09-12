@@ -14,6 +14,7 @@ const paymentSchema = new Schema(
     },
     phone: { type: String, trim: true, default: "" },
     smsSent: { type: Boolean, default: false },
+    slipViewed: { type: Boolean, default: false },
     moolreTxId: { type: String, default: "" },
     rawCallback: { type: Schema.Types.Mixed, default: null },
   },

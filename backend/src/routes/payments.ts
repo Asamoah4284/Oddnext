@@ -64,20 +64,22 @@ async function paymentSnapshot(
     product?: string;
     status: string;
     smsSent?: boolean;
+    slipViewed?: boolean;
     amount: number;
     createdAt?: Date;
   },
   options?: { quick?: boolean }
 ) {
   if (payment.status === "paid") {
-    const tips = await loadPaidTips(payment.product || "vip");
+    const viewed = Boolean(payment.slipViewed);
     return {
       status: "paid" as const,
       reference: payment.externalRef,
       product: payment.product,
       smsSent: payment.smsSent,
+      slipViewed: viewed,
       createdAt: payment.createdAt,
-      tips,
+      tips: viewed ? [] : await loadPaidTips(payment.product || "vip"),
     };
   }
 
@@ -109,6 +111,7 @@ async function paymentSnapshot(
       reference: payment.externalRef,
       product: fulfilled.product,
       smsSent: fulfilled.smsSent,
+      slipViewed: false,
       createdAt: payment.createdAt,
       tips,
     };
@@ -310,6 +313,30 @@ paymentsRouter.post("/webhook", async (req, res, next) => {
     next(err);
   }
 });
+
+paymentsRouter.post(
+  "/ack/:ref",
+  requireAuth,
+  async (req: AuthedRequest, res, next) => {
+    try {
+      const externalRef = String(req.params.ref);
+      const payment = await Payment.findOne({ externalRef });
+      if (!payment) {
+        throw new HttpError(404, "Payment not found");
+      }
+      if (payment.userId.toString() !== req.user!.id && req.user!.role !== "admin") {
+        throw new HttpError(403, "You cannot close this slip");
+      }
+      if (payment.status === "paid" && !payment.slipViewed) {
+        payment.slipViewed = true;
+        await payment.save();
+      }
+      res.json({ status: "paid", reference: externalRef, slipViewed: true, tips: [] });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
 
 paymentsRouter.get(
   "/latest",

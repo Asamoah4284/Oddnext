@@ -5,10 +5,8 @@ import { useAuth } from "@/components/AuthProvider";
 import type { CheckoutSession } from "@/components/MoolreCheckout";
 import { apiFetch } from "@/lib/api";
 import {
+  ackSlip,
   clearPayRef,
-  fetchLatestPayment,
-  isFreshPayment,
-  readPayRef,
   storePayRef,
   type PaymentVerify,
 } from "@/lib/payments";
@@ -17,7 +15,7 @@ import type { ProductId } from "@/lib/products";
 import type { AuthUser } from "@/lib/types";
 
 export function useMoolrePay() {
-  const { token, ready, user, applySession, refresh } = useAuth();
+  const { token, user, applySession, refresh } = useAuth();
   const [busy, setBusy] = useState<ProductId | "">("");
   const [error, setError] = useState("");
   const [phone, setPhone] = useState("");
@@ -34,32 +32,11 @@ export function useMoolrePay() {
   }, [user?.phone]);
 
   useEffect(() => {
-    if (!ready || !token) return;
-    let cancelled = false;
-
-    async function recover() {
-      try {
-        const stored = readPayRef();
-        const latest = await fetchLatestPayment(token!);
-        if (cancelled || latest.status !== "paid") return;
-        const match =
-          (stored && stored === latest.reference) ||
-          isFreshPayment(latest.createdAt);
-        if (match) {
-          clearPayRef();
-          setPaid(latest);
-        }
-        await refresh();
-      } catch {
-        // Ignore recovery failures; user can tap Pay again.
-      }
-    }
-
-    void recover();
     return () => {
-      cancelled = true;
+      setPaid(null);
+      clearPayRef();
     };
-  }, [ready, token, refresh]);
+  }, []);
 
   const startPay = useCallback(
     async (product: ProductId) => {
@@ -111,12 +88,23 @@ export function useMoolrePay() {
   const handlePaid = useCallback(
     async (result: PaymentVerify) => {
       clearPayRef();
+      if (result.slipViewed || !result.tips?.length) {
+        setPaid(null);
+        setCheckout(null);
+        return;
+      }
       setPaid(result);
       setCheckout(null);
+      await ackSlip(result.reference ?? "", token);
       await refresh();
     },
-    [refresh]
+    [refresh, token]
   );
+
+  const dismissPaid = useCallback(() => {
+    setPaid(null);
+    clearPayRef();
+  }, []);
 
   const closeCheckout = useCallback(() => {
     setCheckout(null);
@@ -131,6 +119,7 @@ export function useMoolrePay() {
     paid,
     startPay,
     handlePaid,
+    dismissPaid,
     closeCheckout,
   };
 }

@@ -22,8 +22,8 @@ export function PaidSlip({
         <h3 className="mt-1 text-xl font-extrabold text-cream">{label}</h3>
         <p className="mt-1 text-sm text-mute">
           {smsSent
-            ? "Payment confirmed. The same slip was sent to your Mobile Money number."
-            : "Payment confirmed. Your slip is unlocked below."}
+            ? "This slip is on SMS. Leave this page and it will not stay in the browser."
+            : "Read it now. Leave this page and it will not stay in the browser."}
         </p>
       </div>
       {tips.length === 0 ? (

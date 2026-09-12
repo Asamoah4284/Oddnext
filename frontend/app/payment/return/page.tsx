@@ -10,6 +10,7 @@ import { PaidSlip } from "@/components/PaidSlip";
 import { apiFetch, fallbackStats } from "@/lib/api";
 import {
   PAYMENT_EVENT,
+  ackSlip,
   clearPayRef,
   verifyCheckout,
 } from "@/lib/payments";
@@ -55,8 +56,10 @@ function PaymentReturnInner() {
     }
 
     let cancelled = false;
+    const settled = { current: false };
 
     async function confirm(poll = false) {
+      if (settled.current) return true;
       try {
         if (simulate && !poll) {
           await apiFetch("/api/payments/simulate", {
@@ -68,7 +71,15 @@ function PaymentReturnInner() {
         const result = await verifyCheckout(reference, token, poll);
         if (cancelled) return;
         if (result.status === "paid") {
+          settled.current = true;
           clearPayRef();
+          if (result.slipViewed || !(result.tips ?? []).length) {
+            setPaid(null);
+            setStatus("paid");
+            setMessage("This slip was already sent by SMS. It is not kept in the browser.");
+            await refresh();
+            return true;
+          }
           setStatus("paid");
           setPaid({
             tips: result.tips ?? [],
@@ -77,9 +88,10 @@ function PaymentReturnInner() {
           });
           setMessage(
             result.smsSent
-              ? "Payment confirmed. Your slip is below and on SMS."
-              : "Payment confirmed. Your slip is unlocked below."
+              ? "Payment confirmed. Read the slip now — it is also on SMS and will not stay here."
+              : "Payment confirmed. Read the slip now. It will not stay in the browser."
           );
+          await ackSlip(reference, token);
           await refresh();
           return true;
         }
@@ -115,7 +127,9 @@ function PaymentReturnInner() {
       <p className="text-sm font-medium text-fire">Checkout</p>
       <h1 className="mt-3 text-3xl font-extrabold tracking-tight">
         {status === "paid"
-          ? `${paid?.product ? "Board unlocked" : "Payment confirmed"}`
+          ? paid
+            ? "Read your slip now"
+            : "Sent by SMS"
           : "Payment status"}
       </h1>
       <p className="mt-3 text-sm text-mute">{message}</p>
@@ -132,8 +146,8 @@ function PaymentReturnInner() {
 
       {!inFrame && (
         <div className="mt-8 flex flex-wrap gap-3">
-          <Link href="/#tips" className="btn-primary">
-            Open live boards
+          <Link href="/" className="btn-primary">
+            Back home
           </Link>
           <Link href="/profile" className="btn-outline">
             Buy another board

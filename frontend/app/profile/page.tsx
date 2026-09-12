@@ -22,6 +22,7 @@ export default function ProfilePage() {
     paid,
     startPay,
     handlePaid,
+    dismissPaid,
     closeCheckout,
   } = useMoolrePay();
 
@@ -46,18 +47,16 @@ export default function ProfilePage() {
           </p>
         </div>
 
-        {paid?.status === "paid" && (
+        {paid?.status === "paid" && (paid.tips?.length ?? 0) > 0 && (
           <div className="mt-8">
             <PaidSlip
               tips={paid.tips ?? []}
               product={paid.product}
               smsSent={paid.smsSent}
             />
-            {allAccess && (
-              <Link href="/#tips" className="btn-primary mt-4">
-                Open live boards
-              </Link>
-            )}
+            <button type="button" onClick={dismissPaid} className="btn-outline mt-4">
+              Done · slip stays on SMS only
+            </button>
           </div>
         )}
 
