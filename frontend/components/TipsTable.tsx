@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { MoolreCheckout } from "@/components/MoolreCheckout";
+import { PaidSlip } from "@/components/PaidSlip";
 import { PhoneField } from "@/components/PhoneField";
 import { fetchTips } from "@/lib/api";
 import { useMoolrePay } from "@/hooks/useMoolrePay";
@@ -47,6 +48,7 @@ export function TipsTable({ initial }: { initial: TipsResponse }) {
     phone,
     setPhone,
     checkout,
+    paid,
     startPay,
     handlePaid,
     closeCheckout,
@@ -129,27 +131,21 @@ export function TipsTable({ initial }: { initial: TipsResponse }) {
       </div>
 
       <div className="mb-3 flex flex-wrap gap-2">
-        {SLIP_PRODUCTS.map((item) => {
-          const owned = canAccessBoard(user, item.id);
-          return (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => setBoard(item.id)}
-              className={`rounded-full px-3 py-2 text-sm font-semibold ${
-                board === item.id
-                  ? "bg-fire text-pitch-dark"
-                  : "bg-surface text-mute ring-1 ring-line"
-              }`}
-            >
-              {item.label}
-              <span className="ml-1.5 text-xs opacity-80">
-                GHS {item.priceGhs}
-                {owned ? " · in" : ""}
-              </span>
-            </button>
-          );
-        })}
+        {SLIP_PRODUCTS.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => setBoard(item.id)}
+            className={`rounded-full px-3 py-2 text-sm font-semibold ${
+              board === item.id
+                ? "bg-fire text-pitch-dark"
+                : "bg-surface text-mute ring-1 ring-line"
+            }`}
+          >
+            {item.label}
+            <span className="ml-1.5 text-xs opacity-80">GHS {item.priceGhs}</span>
+          </button>
+        ))}
       </div>
 
       <div className="mb-4 flex w-full rounded-full bg-surface p-1 ring-1 ring-line md:w-fit">
@@ -166,6 +162,16 @@ export function TipsTable({ initial }: { initial: TipsResponse }) {
           </button>
         ))}
       </div>
+
+      {paid?.status === "paid" && (
+        <div className="mb-6">
+          <PaidSlip
+            tips={paid.tips ?? []}
+            product={paid.product}
+            smsSent={paid.smsSent}
+          />
+        </div>
+      )}
 
       {!unlocked ? (
         <div className="card p-6 text-center sm:p-10">

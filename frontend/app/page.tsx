@@ -29,20 +29,6 @@ export default async function HomePage() {
         name: BRAND_NAME,
         url: SITE_URL,
       },
-      ...tips.tips.map((tip) => ({
-        "@type": "SportsEvent",
-        name: `${tip.homeTeam} vs ${tip.awayTeam}`,
-        startDate: tip.kickoffAt,
-        sport: "Soccer",
-        competitor: [
-          { "@type": "SportsTeam", name: tip.homeTeam },
-          { "@type": "SportsTeam", name: tip.awayTeam },
-        ],
-        location: {
-          "@type": "VirtualLocation",
-          url: SITE_URL,
-        },
-      })),
     ],
   };
 

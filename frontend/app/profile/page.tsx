@@ -9,7 +9,7 @@ import { PaidSlip } from "@/components/PaidSlip";
 import { PhoneField } from "@/components/PhoneField";
 import { useMoolrePay } from "@/hooks/useMoolrePay";
 import { fallbackStats } from "@/lib/api";
-import { SLIP_PRODUCTS, VIP_PRODUCT, canAccessBoard } from "@/lib/products";
+import { SLIP_PRODUCTS, VIP_PRODUCT } from "@/lib/products";
 
 export default function ProfilePage() {
   const { user } = useAuth();
@@ -53,9 +53,11 @@ export default function ProfilePage() {
               product={paid.product}
               smsSent={paid.smsSent}
             />
-            <Link href="/#tips" className="btn-primary mt-4">
-              Open live boards
-            </Link>
+            {allAccess && (
+              <Link href="/#tips" className="btn-primary mt-4">
+                Open live boards
+              </Link>
+            )}
           </div>
         )}
 
@@ -73,36 +75,27 @@ export default function ProfilePage() {
           </div>
         ) : (
           <div className="mt-8 overflow-hidden rounded-2xl border border-line bg-surface">
-            {SLIP_PRODUCTS.map((item) => {
-              const owned = canAccessBoard(user, item.id);
-              return (
-                <div
-                  key={item.id}
-                  className="flex items-center justify-between gap-3 border-t border-line px-4 py-4 first:border-t-0"
-                >
-                  <div className="min-w-0">
-                    <p className="text-base font-bold text-cream">{item.label}</p>
-                    <p className="mt-0.5 text-sm font-extrabold text-star">
-                      GHS {item.priceGhs}
-                    </p>
-                  </div>
-                  {owned ? (
-                    <Link href="/#tips" className="btn-outline shrink-0 px-4 py-2 text-sm">
-                      Open
-                    </Link>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => void startPay(item.id)}
-                      disabled={Boolean(busy)}
-                      className="btn-outline shrink-0 px-4 py-2 text-sm"
-                    >
-                      {busy === item.id ? "…" : "Pay"}
-                    </button>
-                  )}
+            {SLIP_PRODUCTS.map((item) => (
+              <div
+                key={item.id}
+                className="flex items-center justify-between gap-3 border-t border-line px-4 py-4 first:border-t-0"
+              >
+                <div className="min-w-0">
+                  <p className="text-base font-bold text-cream">{item.label}</p>
+                  <p className="mt-0.5 text-sm font-extrabold text-star">
+                    GHS {item.priceGhs}
+                  </p>
                 </div>
-              );
-            })}
+                <button
+                  type="button"
+                  onClick={() => void startPay(item.id)}
+                  disabled={Boolean(busy)}
+                  className="btn-outline shrink-0 px-4 py-2 text-sm"
+                >
+                  {busy === item.id ? "…" : "Pay"}
+                </button>
+              </div>
+            ))}
             <div className="flex items-center justify-between gap-3 border-t border-fire/30 bg-fire/10 px-4 py-4">
               <div className="min-w-0">
                 <p className="text-base font-bold text-cream">{VIP_PRODUCT.label}</p>

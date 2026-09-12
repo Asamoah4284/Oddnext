@@ -50,17 +50,9 @@ tipsRouter.get("/", optionalAuth, async (req: AuthedRequest, res, next) => {
   try {
     const tab = tabSchema.parse(req.query.tab ?? "today");
     const board = boardSchema.parse(req.query.board ?? "odds10") as SlipProductId;
+    res.setHeader("Cache-Control", "private, no-store");
     const vipAccess = Boolean(req.user?.vipActive);
-    const boardAccess = canAccessBoard(
-      req.user
-        ? {
-            role: req.user.role,
-            isVip: req.user.isVip || req.user.vipActive,
-            entitlements: req.user.entitlements,
-          }
-        : null,
-      board
-    );
+    const boardAccess = canAccessBoard(req.user, board);
 
     let dateFilter: Record<string, unknown> = {};
     if (tab === "yesterday") {

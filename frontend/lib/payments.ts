@@ -62,5 +62,11 @@ export function fetchLatestPayment(token: string) {
 
 export function isFreshPayment(createdAt?: string) {
   if (!createdAt) return false;
-  return Date.now() - new Date(createdAt).getTime() < 30 * 60 * 1000;
+  const created = new Date(createdAt);
+  const now = new Date();
+  return (
+    created.getFullYear() === now.getFullYear() &&
+    created.getMonth() === now.getMonth() &&
+    created.getDate() === now.getDate()
+  );
 }

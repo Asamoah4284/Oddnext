@@ -132,13 +132,10 @@ export async function fulfillVipPayment(
   if (product === "vip") {
     user.isVip = true;
     user.vipExpiresAt = null;
-  } else if (isSlipProductId(product)) {
-    const current = user.entitlements ?? [];
-    if (!current.includes(product)) {
-      user.entitlements = [...current, product];
-    }
+    await user.save();
+  } else if (assignedUserPhone) {
+    await user.save();
   }
-  await user.save();
 
   const tips = await loadPaidTips(product);
   const smsSent = await deliverOddsSms(phone, product, tips);

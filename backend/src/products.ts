@@ -40,13 +40,13 @@ export function canAccessBoard(
     | {
         role?: string;
         isVip?: boolean;
+        vipActive?: boolean;
         entitlements?: string[];
       }
     | null
     | undefined,
-  board: SlipProductId
+  _board?: SlipProductId
 ): boolean {
   if (!user) return false;
-  if (user.role === "admin" || user.isVip) return true;
-  return (user.entitlements ?? []).includes(board);
+  return user.role === "admin" || Boolean(user.isVip || user.vipActive);
 }
