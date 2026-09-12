@@ -1,0 +1,66 @@
+import { apiFetch } from "./api";
+
+export const PAY_REF_KEY = "oddnext_pay_ref";
+export const PAYMENT_EVENT = "oddnext:payment";
+
+export type PaidTip = {
+  id: string;
+  homeTeam: string;
+  awayTeam: string;
+  prediction: string;
+  odds: number;
+  bookingCode: string;
+  league: string;
+};
+
+export type PaymentVerify = {
+  status: string;
+  reference?: string;
+  product?: string;
+  smsSent?: boolean;
+  createdAt?: string;
+  tips?: PaidTip[];
+};
+
+export type PaymentMessage = {
+  type: typeof PAYMENT_EVENT;
+  reference: string;
+};
+
+export function storePayRef(ref: string) {
+  sessionStorage.setItem(PAY_REF_KEY, ref);
+}
+
+export function readPayRef() {
+  return sessionStorage.getItem(PAY_REF_KEY);
+}
+
+export function clearPayRef() {
+  sessionStorage.removeItem(PAY_REF_KEY);
+}
+
+export function isPaymentMessage(data: unknown): data is PaymentMessage {
+  if (!data || typeof data !== "object") return false;
+  const message = data as PaymentMessage;
+  return message.type === PAYMENT_EVENT && typeof message.reference === "string";
+}
+
+export function verifyCheckout(
+  reference: string,
+  token: string | null,
+  poll = false
+) {
+  return apiFetch<PaymentVerify>(
+    `/api/payments/verify/${reference}${poll ? "?poll=1" : ""}`,
+    { token }
+  );
+}
+
+export function fetchLatestPayment(token: string) {
+  return apiFetch<PaymentVerify>("/api/payments/latest", { token });
+}
+
+export function isFreshPayment(createdAt?: string) {
+  if (!createdAt) return false;
+  return Date.now() - new Date(createdAt).getTime() < 30 * 60 * 1000;
+}

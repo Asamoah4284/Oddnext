@@ -1,0 +1,386 @@
+import { randomUUID } from "node:crypto";
+import bcrypt from "bcryptjs";
+import { Router } from "express";
+import { z } from "zod";
+import { config, hasMoolreCredentials } from "../config.js";
+import {
+  optionalAuth,
+  requireAuth,
+  toAuthUser,
+  type AuthedRequest,
+} from "../middleware/auth.js";
+import { Payment } from "../models/Payment.js";
+import { User } from "../models/User.js";
+import { PRODUCT_IDS, getProduct } from "../products.js";
+import { signToken } from "./auth.js";
+import {
+  amountsMatch,
+  createPaymentLink,
+  verifyPaymentStatus,
+} from "../services/moolre.js";
+import { looksLikeGhPhone } from "../services/sms.js";
+import { fulfillVipPayment, loadPaidTips } from "../services/vip.js";
+import { HttpError } from "../utils/httpError.js";
+
+export const paymentsRouter = Router();
+
+const initiateSchema = z.object({
+  product: z.enum(PRODUCT_IDS).default("vip"),
+  email: z.string().trim().email().toLowerCase().optional(),
+  phone: z.string().trim().min(9).max(16),
+  returnOrigin: z.string().url().optional(),
+});
+
+function originFromValue(value?: string): string | null {
+  if (!value) return null;
+  try {
+    return new URL(value).origin;
+  } catch {
+    return null;
+  }
+}
+
+function resolveReturnOrigin(req: AuthedRequest, requested?: string): string {
+  const fallback = config.frontendUrl.replace(/\/$/, "");
+  const allowed = new Set([
+    fallback,
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+  ]);
+  const candidates = [requested, req.headers.origin, fallback];
+  for (const item of candidates) {
+    const origin = originFromValue(item);
+    if (!origin) continue;
+    if (allowed.has(origin) || (config.isDev && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin))) {
+      return origin;
+    }
+  }
+  return fallback;
+}
+
+async function paymentSnapshot(
+  payment: {
+    externalRef: string;
+    product?: string;
+    status: string;
+    smsSent?: boolean;
+    amount: number;
+    createdAt?: Date;
+  },
+  options?: { quick?: boolean }
+) {
+  if (payment.status === "paid") {
+    const tips = await loadPaidTips(payment.product || "vip");
+    return {
+      status: "paid" as const,
+      reference: payment.externalRef,
+      product: payment.product,
+      smsSent: payment.smsSent,
+      createdAt: payment.createdAt,
+      tips,
+    };
+  }
+
+  if (!hasMoolreCredentials()) {
+    return {
+      status: payment.status,
+      reference: payment.externalRef,
+      product: payment.product,
+      createdAt: payment.createdAt,
+    };
+  }
+
+  const verified = await verifyPaymentStatus(payment.externalRef, {
+    retries: options?.quick ? [0] : undefined,
+  });
+  if (
+    verified.paid &&
+    verified.externalRef === payment.externalRef &&
+    amountsMatch(payment.amount, verified.amount)
+  ) {
+    const fulfilled = await fulfillVipPayment(payment.externalRef, {
+      moolreTxId: verified.transactionId,
+      phone: verified.phone,
+      rawStatus: verified.raw,
+    });
+    const tips = await loadPaidTips(fulfilled.product);
+    return {
+      status: "paid" as const,
+      reference: payment.externalRef,
+      product: fulfilled.product,
+      smsSent: fulfilled.smsSent,
+      createdAt: payment.createdAt,
+      tips,
+    };
+  }
+
+  return {
+    status: payment.status,
+    reference: payment.externalRef,
+    product: payment.product,
+    createdAt: payment.createdAt,
+  };
+}
+
+paymentsRouter.post(
+  "/initiate",
+  optionalAuth,
+  async (req: AuthedRequest, res, next) => {
+    try {
+      const body = initiateSchema.parse(req.body ?? {});
+      if (!looksLikeGhPhone(body.phone)) {
+        throw new HttpError(400, "Enter a valid Ghana Mobile Money number");
+      }
+      const product = getProduct(body.product);
+      if (!product) {
+        throw new HttpError(400, "Unknown product");
+      }
+
+      let userId = req.user?.id;
+      let email = req.user?.email;
+      let session: { token: string; user: ReturnType<typeof toAuthUser> } | null =
+        null;
+
+      if (!userId) {
+        const guestEmail =
+          body.email ?? `guest.${randomUUID().replace(/-/g, "").slice(0, 12)}@pay.oddnext.app`;
+        let account = body.email
+          ? await User.findOne({ email: body.email })
+          : null;
+        if (!account) {
+          account = await User.create({
+            name: "Guest",
+            email: guestEmail,
+            phone: body.phone ?? "",
+            password: await bcrypt.hash(randomUUID(), 12),
+          });
+        } else if (body.phone && !account.phone) {
+          account.phone = body.phone;
+          await account.save();
+        }
+        if (account.role === "admin") {
+          throw new HttpError(400, "Admin accounts pay from the desk");
+        }
+        userId = account._id.toString();
+        email = account.email;
+        session = {
+          token: signToken(userId),
+          user: toAuthUser(account),
+        };
+      } else if (body.phone) {
+        const account = await User.findById(userId);
+        if (account && !account.phone) {
+          account.phone = body.phone;
+          await account.save();
+        }
+      }
+
+      const amount = product.priceGhs;
+      const externalRef = `se_${randomUUID().replace(/-/g, "")}`;
+
+      await Payment.create({
+        userId,
+        product: product.id,
+        externalRef,
+        amount,
+        currency: "GHS",
+        status: "pending",
+        phone: body.phone ?? "",
+      });
+
+      const callback = `${req.protocol}://${req.get("host")}/api/payments/webhook`;
+      const returnOrigin = resolveReturnOrigin(req, body.returnOrigin);
+      const redirect = `${returnOrigin}/payment/return?reference=${externalRef}&embed=1`;
+
+      if (!hasMoolreCredentials()) {
+        if (!config.isDev) {
+          throw new HttpError(503, "Payments are not configured yet");
+        }
+        res.json({
+          authorization_url: `${redirect}&simulate=1`,
+          reference: externalRef,
+          simulated: true,
+          amount,
+          currency: "GHS",
+          product: product.id,
+          ...session,
+        });
+        return;
+      }
+
+      const authorizationUrl = await createPaymentLink({
+        amount,
+        email: email!,
+        externalRef,
+        callback,
+        redirect,
+        phone: body.phone,
+        metadata: {
+          product: product.id,
+          userId,
+          phone: body.phone,
+          source: "oddnext",
+        },
+      });
+
+      res.json({
+        authorization_url: authorizationUrl,
+        reference: externalRef,
+        simulated: false,
+        amount,
+        currency: "GHS",
+        product: product.id,
+        ...session,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+paymentsRouter.post("/webhook", async (req, res, next) => {
+  try {
+    const payload = req.body as {
+      secret?: string;
+      externalref?: string;
+      txstatus?: number;
+      transactionid?: string | number;
+      data?: {
+        txstatus?: number;
+        externalref?: string;
+        transactionid?: string | number;
+        amount?: string | number;
+        secret?: string;
+        webhookSecret?: string;
+      };
+    };
+    const data = payload.data ?? {};
+    const externalRef = String(data.externalref ?? payload.externalref ?? "");
+    const incomingSecret = String(
+      data.secret ??
+        data.webhookSecret ??
+        payload.secret ??
+        req.headers["x-moolre-secret"] ??
+        req.headers["x-moolre-webhook-secret"] ??
+        ""
+    );
+
+    if (config.moolre.webhookSecret && incomingSecret !== config.moolre.webhookSecret) {
+      throw new HttpError(401, "Invalid webhook secret");
+    }
+
+    const payment = await Payment.findOne({ externalRef });
+    if (!payment) {
+      res.status(200).json({ received: true, ignored: "unknown reference" });
+      return;
+    }
+
+    payment.rawCallback = payload;
+    await payment.save();
+
+    if (hasMoolreCredentials()) {
+      const verified = await verifyPaymentStatus(externalRef);
+      if (
+        !verified.paid ||
+        verified.externalRef !== externalRef ||
+        !amountsMatch(payment.amount, verified.amount) ||
+        (verified.accountNumber &&
+          verified.accountNumber !== config.moolre.accountNumber)
+      ) {
+        payment.status = "failed";
+        await payment.save();
+        res.status(200).json({ received: true, fulfilled: false });
+        return;
+      }
+      await fulfillVipPayment(externalRef, {
+        moolreTxId: verified.transactionId,
+        phone: verified.phone,
+        rawCallback: payload,
+        rawStatus: verified.raw,
+      });
+    } else if (Number(data.txstatus) === 1 && config.isDev) {
+      await fulfillVipPayment(externalRef, {
+        moolreTxId: String(data.transactionid ?? ""),
+        rawCallback: payload,
+      });
+    }
+
+    res.status(200).json({ received: true, fulfilled: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+paymentsRouter.get(
+  "/latest",
+  requireAuth,
+  async (req: AuthedRequest, res, next) => {
+    try {
+      const payment = await Payment.findOne({ userId: req.user!.id }).sort({
+        createdAt: -1,
+      });
+      if (!payment) {
+        res.json({ status: "none" });
+        return;
+      }
+      res.json(await paymentSnapshot(payment));
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+paymentsRouter.get(
+  "/verify/:ref",
+  requireAuth,
+  async (req: AuthedRequest, res, next) => {
+    try {
+      const externalRef = String(req.params.ref);
+      const payment = await Payment.findOne({ externalRef });
+      if (!payment) {
+        throw new HttpError(404, "Payment not found");
+      }
+      if (payment.userId.toString() !== req.user!.id && req.user!.role !== "admin") {
+        throw new HttpError(403, "You cannot verify this payment");
+      }
+
+      res.json(
+        await paymentSnapshot(payment, { quick: req.query.poll === "1" })
+      );
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+const simulateSchema = z.object({
+  reference: z.string().min(4),
+});
+
+paymentsRouter.post(
+  "/simulate",
+  requireAuth,
+  async (req: AuthedRequest, res, next) => {
+    try {
+      if (!config.isDev) {
+        throw new HttpError(404, "Not found");
+      }
+      const { reference } = simulateSchema.parse(req.body);
+      const payment = await Payment.findOne({ externalRef: reference });
+      if (!payment) {
+        throw new HttpError(404, "Payment not found");
+      }
+      if (payment.userId.toString() !== req.user!.id && req.user!.role !== "admin") {
+        throw new HttpError(403, "You cannot simulate this payment");
+      }
+      const result = await fulfillVipPayment(reference, {
+        moolreTxId: "simulated",
+        rawCallback: { simulated: true },
+      });
+      const tips = await loadPaidTips(result.product);
+      res.json({ status: "paid", reference, tips, ...result });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
