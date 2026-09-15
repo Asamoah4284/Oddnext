@@ -89,7 +89,7 @@ export default function ProfilePage() {
                 <div className="min-w-0">
                   <p className="text-base font-bold text-cream">{item.label}</p>
                   <p className="mt-0.5 text-sm font-extrabold text-star">
-                    {formatProductPrice(item.priceGhs, country)}
+                    {formatProductPrice(item, country)}
                   </p>
                 </div>
                 <button

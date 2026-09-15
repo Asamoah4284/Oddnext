@@ -3,8 +3,14 @@ export const GHS_TO_NGN = 120;
 export type PayCountry = "GH" | "NG";
 export type PayCurrency = "GHS" | "NGN";
 
+export type PricedProduct = {
+  id?: string;
+  priceGhs: number;
+  priceNgn?: number;
+};
+
 export const SLIP_PRODUCTS = [
-  { id: "odds10", label: "10 odds", priceGhs: 30 },
+  { id: "odds10", label: "10 odds", priceGhs: 30, priceNgn: 100 },
   { id: "odds50", label: "50 odds", priceGhs: 80 },
   { id: "odds100", label: "100+ odds", priceGhs: 100 },
   { id: "draw", label: "Draw games", priceGhs: 80 },
@@ -33,13 +39,28 @@ export function currencyForCountry(country: PayCountry): PayCurrency {
 export function amountForCountry(
   priceGhs: number,
   country: PayCountry,
-  rate = GHS_TO_NGN
+  rate = GHS_TO_NGN,
+  priceNgn?: number
 ): number {
-  return country === "NG" ? Math.round(priceGhs * rate) : priceGhs;
+  if (country !== "NG") return priceGhs;
+  if (priceNgn != null) return priceNgn;
+  return Math.round(priceGhs * rate);
 }
 
-export function formatProductPrice(priceGhs: number, country: PayCountry): string {
-  const amount = amountForCountry(priceGhs, country);
+export function amountForProduct(
+  product: PricedProduct,
+  country: PayCountry,
+  rate = GHS_TO_NGN
+): number {
+  return amountForCountry(product.priceGhs, country, rate, product.priceNgn);
+}
+
+export function formatProductPrice(
+  product: PricedProduct | number,
+  country: PayCountry
+): string {
+  const priced = typeof product === "number" ? { priceGhs: product } : product;
+  const amount = amountForProduct(priced, country);
   if (country === "NG") return `₦${amount.toLocaleString("en-NG")}`;
   return `GHS ${amount}`;
 }

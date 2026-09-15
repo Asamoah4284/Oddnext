@@ -142,7 +142,7 @@ export function TipsTable({ initial }: { initial: TipsResponse }) {
             }`}
           >
             {item.label}
-            <span className="ml-1.5 text-xs opacity-80">{formatProductPrice(item.priceGhs, country)}</span>
+            <span className="ml-1.5 text-xs opacity-80">{formatProductPrice(item, country)}</span>
           </button>
         ))}
       </div>
@@ -183,7 +183,7 @@ export function TipsTable({ initial }: { initial: TipsResponse }) {
         <div className="card p-6 text-center sm:p-10">
           <p className="text-xs font-medium text-fire">{selected.label}</p>
           <h3 className="mt-2 font-sans text-2xl font-extrabold tracking-tight">
-            Pay {formatProductPrice(selected.priceGhs, country)} for this board.
+            Pay {formatProductPrice(selected, country)} for this board.
           </h3>
           <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-mute">
             Picks, odds, and booking codes stay hidden until you pay this board — or
@@ -206,7 +206,7 @@ export function TipsTable({ initial }: { initial: TipsResponse }) {
             >
               {busy === selected.id
                 ? "Opening checkout…"
-                : `Unlock ${selected.label} · ${formatProductPrice(selected.priceGhs, country)}`}
+                : `Unlock ${selected.label} · ${formatProductPrice(selected, country)}`}
             </button>
             <button
               type="button"

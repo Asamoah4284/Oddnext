@@ -13,7 +13,7 @@ import { Payment } from "../models/Payment.js";
 import { User } from "../models/User.js";
 import {
   PRODUCT_IDS,
-  amountForCountry,
+  amountForProduct,
   currencyForCountry,
   getProduct,
   type PayCountry,
@@ -218,7 +218,7 @@ paymentsRouter.post(
         }
       }
 
-      const amount = amountForCountry(product.priceGhs, country, config.ghsToNgn);
+      const amount = amountForProduct(product, country, config.ghsToNgn);
       const currency = currencyForCountry(country);
       const externalRef = `se_${randomUUID().replace(/-/g, "")}`;
 

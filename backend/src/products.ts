@@ -3,8 +3,14 @@ export const GHS_TO_NGN = 120;
 export type PayCountry = "GH" | "NG";
 export type PayCurrency = "GHS" | "NGN";
 
+export type PricedProduct = {
+  id?: string;
+  priceGhs: number;
+  priceNgn?: number;
+};
+
 export const SLIP_PRODUCTS = [
-  { id: "odds10", label: "10 odds", priceGhs: 30 },
+  { id: "odds10", label: "10 odds", priceGhs: 30, priceNgn: 100 },
   { id: "odds50", label: "50 odds", priceGhs: 80 },
   { id: "odds100", label: "100+ odds", priceGhs: 100 },
   { id: "draw", label: "Draw games", priceGhs: 80 },
@@ -43,9 +49,20 @@ export function currencyForCountry(country: PayCountry): PayCurrency {
 export function amountForCountry(
   priceGhs: number,
   country: PayCountry,
+  rate = GHS_TO_NGN,
+  priceNgn?: number
+): number {
+  if (country !== "NG") return priceGhs;
+  if (priceNgn != null) return priceNgn;
+  return Math.round(priceGhs * rate);
+}
+
+export function amountForProduct(
+  product: PricedProduct,
+  country: PayCountry,
   rate = GHS_TO_NGN
 ): number {
-  return country === "NG" ? Math.round(priceGhs * rate) : priceGhs;
+  return amountForCountry(product.priceGhs, country, rate, product.priceNgn);
 }
 
 export function isSlipProductId(id: string): id is SlipProductId {

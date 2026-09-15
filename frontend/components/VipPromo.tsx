@@ -38,10 +38,10 @@ export function VipPromo({ price }: { price: number }) {
               </div>
               <div className="shrink-0 text-right">
                 <p className="text-base font-extrabold text-star">
-                  {formatProductPrice(item.priceGhs, "GH")}
+                  {formatProductPrice(item, "GH")}
                 </p>
                 <p className="mt-0.5 text-xs font-semibold text-mute">
-                  {formatProductPrice(item.priceGhs, "NG")}
+                  {formatProductPrice(item, "NG")}
                 </p>
               </div>
             </Link>
