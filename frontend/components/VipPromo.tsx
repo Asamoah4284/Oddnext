@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { SLIP_PRODUCTS, VIP_PRODUCT } from "@/lib/products";
+import { SLIP_PRODUCTS, VIP_PRODUCT, formatProductPrice } from "@/lib/products";
 
 const blurbs: Record<string, string> = {
   odds10: "Banker slip",
@@ -21,8 +21,8 @@ export function VipPromo({ price }: { price: number }) {
           Pay one board, or unlock all.
         </h2>
         <p className="mt-3 max-w-xl text-sm leading-6 text-mute sm:text-base">
-          Pick a slip and pay that price. VIP is GHS {vipPrice} and opens every
-          board, with booking codes.
+          Pick a slip and pay that price. VIP is {formatProductPrice(vipPrice, "GH")} or{" "}
+          {formatProductPrice(vipPrice, "NG")} and opens every board, with booking codes.
         </p>
 
         <div className="mt-6 overflow-hidden rounded-2xl border border-white/10 bg-black/30">
@@ -38,9 +38,11 @@ export function VipPromo({ price }: { price: number }) {
               </div>
               <div className="shrink-0 text-right">
                 <p className="text-base font-extrabold text-star">
-                  GHS {item.priceGhs}
+                  {formatProductPrice(item.priceGhs, "GH")}
                 </p>
-                <p className="mt-0.5 text-xs font-semibold text-mute">Pay</p>
+                <p className="mt-0.5 text-xs font-semibold text-mute">
+                  {formatProductPrice(item.priceGhs, "NG")}
+                </p>
               </div>
             </Link>
           ))}
@@ -53,8 +55,12 @@ export function VipPromo({ price }: { price: number }) {
               <p className="mt-0.5 text-xs text-mute">{blurbs.vip}</p>
             </div>
             <div className="shrink-0 text-right">
-              <p className="text-base font-extrabold text-star">GHS {vipPrice}</p>
-              <p className="mt-0.5 text-xs font-semibold text-star">Join</p>
+              <p className="text-base font-extrabold text-star">
+                {formatProductPrice(vipPrice, "GH")}
+              </p>
+              <p className="mt-0.5 text-xs font-semibold text-star">
+                {formatProductPrice(vipPrice, "NG")}
+              </p>
             </div>
           </Link>
         </div>

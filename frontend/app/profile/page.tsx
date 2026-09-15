@@ -9,7 +9,7 @@ import { PaidSlip } from "@/components/PaidSlip";
 import { PhoneField } from "@/components/PhoneField";
 import { useMoolrePay } from "@/hooks/useMoolrePay";
 import { fallbackStats } from "@/lib/api";
-import { SLIP_PRODUCTS, VIP_PRODUCT } from "@/lib/products";
+import { SLIP_PRODUCTS, VIP_PRODUCT, formatProductPrice } from "@/lib/products";
 
 export default function ProfilePage() {
   const { user } = useAuth();
@@ -18,6 +18,8 @@ export default function ProfilePage() {
     error,
     phone,
     setPhone,
+    country,
+    setCountry,
     checkout,
     paid,
     startPay,
@@ -43,7 +45,7 @@ export default function ProfilePage() {
           <p className="mt-3 text-sm leading-6 text-mute sm:text-base">
             {allAccess
               ? "Every odds board is open."
-              : "Enter the number you will pay with. After Mobile Money confirms, the slip opens here and is sent by SMS."}
+              : "Enter a Ghana or Nigeria Mobile Money number. After payment confirms, the slip opens here and is sent by SMS."}
           </p>
         </div>
 
@@ -62,7 +64,12 @@ export default function ProfilePage() {
 
         {!allAccess && (
           <div className="card mt-8 max-w-md p-5">
-            <PhoneField value={phone} onChange={setPhone} />
+            <PhoneField
+              value={phone}
+              onChange={setPhone}
+              country={country}
+              onCountryChange={setCountry}
+            />
           </div>
         )}
 
@@ -82,7 +89,7 @@ export default function ProfilePage() {
                 <div className="min-w-0">
                   <p className="text-base font-bold text-cream">{item.label}</p>
                   <p className="mt-0.5 text-sm font-extrabold text-star">
-                    GHS {item.priceGhs}
+                    {formatProductPrice(item.priceGhs, country)}
                   </p>
                 </div>
                 <button
@@ -99,7 +106,7 @@ export default function ProfilePage() {
               <div className="min-w-0">
                 <p className="text-base font-bold text-cream">{VIP_PRODUCT.label}</p>
                 <p className="mt-0.5 text-sm font-extrabold text-star">
-                  GHS {VIP_PRODUCT.priceGhs}
+                  {formatProductPrice(VIP_PRODUCT.priceGhs, country)}
                 </p>
               </div>
               <button

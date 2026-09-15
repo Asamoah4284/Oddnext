@@ -11,14 +11,24 @@ import {
 } from "../middleware/auth.js";
 import { Payment } from "../models/Payment.js";
 import { User } from "../models/User.js";
-import { PRODUCT_IDS, getProduct } from "../products.js";
+import {
+  PRODUCT_IDS,
+  amountForCountry,
+  currencyForCountry,
+  getProduct,
+  type PayCountry,
+} from "../products.js";
 import { signToken } from "./auth.js";
 import {
   amountsMatch,
   createPaymentLink,
   verifyPaymentStatus,
 } from "../services/moolre.js";
-import { looksLikeGhPhone } from "../services/sms.js";
+import {
+  detectPayCountry,
+  formatPhoneForMoolre,
+  looksLikePayPhone,
+} from "../services/sms.js";
 import { fulfillVipPayment, loadPaidTips } from "../services/vip.js";
 import { HttpError } from "../utils/httpError.js";
 
@@ -27,9 +37,20 @@ export const paymentsRouter = Router();
 const initiateSchema = z.object({
   product: z.enum(PRODUCT_IDS).default("vip"),
   email: z.string().trim().email().toLowerCase().optional(),
-  phone: z.string().trim().min(9).max(16),
+  phone: z.string().trim().min(9).max(20),
+  country: z.enum(["GH", "NG"]).optional(),
   returnOrigin: z.string().url().optional(),
 });
+
+function resolvePayCountry(phone: string, requested?: PayCountry): PayCountry {
+  const detected = detectPayCountry(phone);
+  if (requested && looksLikePayPhone(phone, requested)) return requested;
+  if (detected) return detected;
+  throw new HttpError(
+    400,
+    "Enter a valid Ghana or Nigeria Mobile Money number"
+  );
+}
 
 function originFromValue(value?: string): string | null {
   if (!value) return null;
@@ -58,6 +79,24 @@ function resolveReturnOrigin(req: AuthedRequest, requested?: string): string {
   return fallback;
 }
 
+function moolreAccountForCurrency(currency?: string): string {
+  if (currency === "NGN" && config.moolre.ngnAccountNumber) {
+    return config.moolre.ngnAccountNumber;
+  }
+  return config.moolre.accountNumber;
+}
+
+function isKnownMoolreAccount(accountNumber: string): boolean {
+  if (!accountNumber) return true;
+  return (
+    accountNumber === config.moolre.accountNumber ||
+    Boolean(
+      config.moolre.ngnAccountNumber &&
+        accountNumber === config.moolre.ngnAccountNumber
+    )
+  );
+}
+
 async function paymentSnapshot(
   payment: {
     externalRef: string;
@@ -66,6 +105,7 @@ async function paymentSnapshot(
     smsSent?: boolean;
     slipViewed?: boolean;
     amount: number;
+    currency?: string;
     createdAt?: Date;
   },
   options?: { quick?: boolean }
@@ -94,6 +134,7 @@ async function paymentSnapshot(
 
   const verified = await verifyPaymentStatus(payment.externalRef, {
     retries: options?.quick ? [0] : undefined,
+    accountNumber: moolreAccountForCurrency(payment.currency),
   });
   if (
     verified.paid &&
@@ -131,9 +172,8 @@ paymentsRouter.post(
   async (req: AuthedRequest, res, next) => {
     try {
       const body = initiateSchema.parse(req.body ?? {});
-      if (!looksLikeGhPhone(body.phone)) {
-        throw new HttpError(400, "Enter a valid Ghana Mobile Money number");
-      }
+      const country = resolvePayCountry(body.phone, body.country);
+      const phone = formatPhoneForMoolre(body.phone);
       const product = getProduct(body.product);
       if (!product) {
         throw new HttpError(400, "Unknown product");
@@ -154,11 +194,11 @@ paymentsRouter.post(
           account = await User.create({
             name: "Guest",
             email: guestEmail,
-            phone: body.phone ?? "",
+            phone,
             password: await bcrypt.hash(randomUUID(), 12),
           });
-        } else if (body.phone && !account.phone) {
-          account.phone = body.phone;
+        } else if (phone && !account.phone) {
+          account.phone = phone;
           await account.save();
         }
         if (account.role === "admin") {
@@ -170,15 +210,16 @@ paymentsRouter.post(
           token: signToken(userId),
           user: toAuthUser(account),
         };
-      } else if (body.phone) {
+      } else if (phone) {
         const account = await User.findById(userId);
         if (account && !account.phone) {
-          account.phone = body.phone;
+          account.phone = phone;
           await account.save();
         }
       }
 
-      const amount = product.priceGhs;
+      const amount = amountForCountry(product.priceGhs, country, config.ghsToNgn);
+      const currency = currencyForCountry(country);
       const externalRef = `se_${randomUUID().replace(/-/g, "")}`;
 
       await Payment.create({
@@ -186,9 +227,9 @@ paymentsRouter.post(
         product: product.id,
         externalRef,
         amount,
-        currency: "GHS",
+        currency,
         status: "pending",
-        phone: body.phone ?? "",
+        phone,
       });
 
       const callback = `${req.protocol}://${req.get("host")}/api/payments/webhook`;
@@ -204,7 +245,7 @@ paymentsRouter.post(
           reference: externalRef,
           simulated: true,
           amount,
-          currency: "GHS",
+          currency,
           product: product.id,
           ...session,
         });
@@ -217,11 +258,13 @@ paymentsRouter.post(
         externalRef,
         callback,
         redirect,
-        phone: body.phone,
+        phone,
+        currency,
         metadata: {
           product: product.id,
           userId,
-          phone: body.phone,
+          phone,
+          country,
           source: "oddnext",
         },
       });
@@ -231,7 +274,7 @@ paymentsRouter.post(
         reference: externalRef,
         simulated: false,
         amount,
-        currency: "GHS",
+        currency,
         product: product.id,
         ...session,
       });
@@ -282,13 +325,14 @@ paymentsRouter.post("/webhook", async (req, res, next) => {
     await payment.save();
 
     if (hasMoolreCredentials()) {
-      const verified = await verifyPaymentStatus(externalRef);
+      const verified = await verifyPaymentStatus(externalRef, {
+        accountNumber: moolreAccountForCurrency(payment.currency),
+      });
       if (
         !verified.paid ||
         verified.externalRef !== externalRef ||
         !amountsMatch(payment.amount, verified.amount) ||
-        (verified.accountNumber &&
-          verified.accountNumber !== config.moolre.accountNumber)
+        !isKnownMoolreAccount(verified.accountNumber)
       ) {
         payment.status = "failed";
         await payment.save();

@@ -69,11 +69,18 @@ export async function createPaymentLink(input: {
   callback: string;
   redirect: string;
   phone?: string;
+  currency?: "GHS" | "NGN";
   metadata?: Record<string, unknown>;
 }): Promise<string> {
   if (!hasMoolreCredentials()) {
     throw new HttpError(503, "Moolre is not configured on this server");
   }
+
+  const currency = input.currency ?? "GHS";
+  const accountNumber =
+    currency === "NGN" && config.moolre.ngnAccountNumber
+      ? config.moolre.ngnAccountNumber
+      : config.moolre.accountNumber;
 
   const response = await moolrePost<MoolreLinkData>("/embed/link", {
     type: 1,
@@ -83,8 +90,8 @@ export async function createPaymentLink(input: {
     callback: input.callback,
     redirect: input.redirect,
     reusable: "0",
-    currency: "GHS",
-    accountnumber: config.moolre.accountNumber,
+    currency,
+    accountnumber: accountNumber,
     ...(input.phone ? { phone: input.phone } : {}),
     metadata: input.metadata ?? {},
   });
@@ -98,7 +105,7 @@ export async function createPaymentLink(input: {
 
 export async function verifyPaymentStatus(
   externalRef: string,
-  options?: { retries?: number[] }
+  options?: { retries?: number[]; accountNumber?: string }
 ): Promise<{
   paid: boolean;
   amount: number;
@@ -120,7 +127,7 @@ export async function verifyPaymentStatus(
       type: 1,
       idtype: 1,
       id: externalRef,
-      accountnumber: config.moolre.accountNumber,
+      accountnumber: options?.accountNumber || config.moolre.accountNumber,
     });
     last = response.data ?? {};
     if (Number(last.txstatus) === 1 || Number(last.txstatus) === 2) break;

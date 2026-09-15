@@ -9,7 +9,7 @@ import { fetchTips } from "@/lib/api";
 import { useMoolrePay } from "@/hooks/useMoolrePay";
 import type { PaymentVerify } from "@/lib/payments";
 import { formatKickoff } from "@/lib/format";
-import { SLIP_PRODUCTS, VIP_PRODUCT, canAccessBoard } from "@/lib/products";
+import { SLIP_PRODUCTS, VIP_PRODUCT, canAccessBoard, formatProductPrice } from "@/lib/products";
 import type { SlipProductId } from "@/lib/products";
 import type { Tip, TipsResponse } from "@/lib/types";
 
@@ -43,6 +43,8 @@ export function TipsTable({ initial }: { initial: TipsResponse }) {
     error,
     phone,
     setPhone,
+    country,
+    setCountry,
     checkout,
     paid,
     startPay,
@@ -123,7 +125,7 @@ export function TipsTable({ initial }: { initial: TipsResponse }) {
           Today’s games
         </h2>
         <p className="mt-2 text-sm text-mute">
-          Pick a board. Pay that price, or join VIP for GHS {VIP_PRODUCT.priceGhs} and open all.
+          Pick a board. Pay that price, or join VIP for {formatProductPrice(VIP_PRODUCT.priceGhs, country)} and open all.
         </p>
       </div>
 
@@ -140,7 +142,7 @@ export function TipsTable({ initial }: { initial: TipsResponse }) {
             }`}
           >
             {item.label}
-            <span className="ml-1.5 text-xs opacity-80">GHS {item.priceGhs}</span>
+            <span className="ml-1.5 text-xs opacity-80">{formatProductPrice(item.priceGhs, country)}</span>
           </button>
         ))}
       </div>
@@ -181,14 +183,19 @@ export function TipsTable({ initial }: { initial: TipsResponse }) {
         <div className="card p-6 text-center sm:p-10">
           <p className="text-xs font-medium text-fire">{selected.label}</p>
           <h3 className="mt-2 font-sans text-2xl font-extrabold tracking-tight">
-            Pay GHS {selected.priceGhs} for this board.
+            Pay {formatProductPrice(selected.priceGhs, country)} for this board.
           </h3>
           <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-mute">
             Picks, odds, and booking codes stay hidden until you pay this board — or
-            unlock every board with VIP for GHS {VIP_PRODUCT.priceGhs}.
+            unlock every board with VIP for {formatProductPrice(VIP_PRODUCT.priceGhs, country)}.
           </p>
           <div className="mx-auto mt-5 max-w-sm text-left">
-            <PhoneField value={phone} onChange={setPhone} />
+            <PhoneField
+              value={phone}
+              onChange={setPhone}
+              country={country}
+              onCountryChange={setCountry}
+            />
           </div>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             <button
@@ -199,7 +206,7 @@ export function TipsTable({ initial }: { initial: TipsResponse }) {
             >
               {busy === selected.id
                 ? "Opening checkout…"
-                : `Unlock ${selected.label} · GHS ${selected.priceGhs}`}
+                : `Unlock ${selected.label} · ${formatProductPrice(selected.priceGhs, country)}`}
             </button>
             <button
               type="button"
@@ -209,7 +216,7 @@ export function TipsTable({ initial }: { initial: TipsResponse }) {
             >
               {busy === "vip"
                 ? "Opening checkout…"
-                : `VIP all boards · GHS ${VIP_PRODUCT.priceGhs}`}
+                : `VIP all boards · ${formatProductPrice(VIP_PRODUCT.priceGhs, country)}`}
             </button>
           </div>
           {error && <p className="mt-4 text-sm text-lost">{error}</p>}

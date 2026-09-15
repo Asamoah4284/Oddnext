@@ -1,5 +1,5 @@
 import { config } from "../config.js";
-import { getProduct } from "../products.js";
+import { getProduct, type PayCountry } from "../products.js";
 
 const SMS_URL = "https://api.moolre.com/open/sms/send";
 
@@ -14,13 +14,38 @@ export function looksLikeGhPhone(value: string): boolean {
   );
 }
 
+export function looksLikeNgPhone(value: string): boolean {
+  const digits = value.replace(/\D/g, "");
+  return (
+    (digits.startsWith("234") && digits.length === 13) ||
+    (digits.startsWith("0") && digits.length === 11) ||
+    (digits.length === 10 && /^[789]/.test(digits))
+  );
+}
+
+export function detectPayCountry(value: string): PayCountry | null {
+  const digits = value.replace(/\D/g, "");
+  if (digits.length < 9) return null;
+  if (digits.startsWith("234") || looksLikeNgPhone(value)) return "NG";
+  if (digits.startsWith("233") || looksLikeGhPhone(value)) return "GH";
+  return null;
+}
+
+export function looksLikePayPhone(value: string, country?: PayCountry): boolean {
+  if (country === "GH") return looksLikeGhPhone(value);
+  if (country === "NG") return looksLikeNgPhone(value);
+  return looksLikeGhPhone(value) || looksLikeNgPhone(value);
+}
+
 export function formatPhoneForMoolre(phoneNumber: string): string {
   const clean = phoneNumber.replace(/[\s\-()]/g, "");
   let formatted = clean.startsWith("+") ? clean.slice(1) : clean;
+  const country = detectPayCountry(formatted) ?? "GH";
+  const prefix = country === "NG" ? "234" : "233";
   if (formatted.startsWith("0")) {
-    formatted = `233${formatted.slice(1)}`;
-  } else if (!formatted.startsWith("233")) {
-    formatted = `233${formatted}`;
+    formatted = `${prefix}${formatted.slice(1)}`;
+  } else if (!formatted.startsWith(prefix)) {
+    formatted = `${prefix}${formatted}`;
   }
   return formatted;
 }
@@ -37,7 +62,7 @@ function walkForPhone(value: unknown, depth: number): string {
   if (value == null || depth > 5) return "";
   if (typeof value === "string" || typeof value === "number") {
     const text = String(value);
-    return looksLikeGhPhone(text) ? text : "";
+    return looksLikePayPhone(text) ? text : "";
   }
   if (Array.isArray(value)) {
     for (const item of value) {

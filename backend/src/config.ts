@@ -20,6 +20,7 @@ export const config = {
   frontendUrl: process.env.FRONTEND_URL ?? "http://localhost:3000",
   vipPriceGhs: Number(process.env.VIP_PRICE_GHS ?? 1500),
   vipDurationDays: Number(process.env.VIP_DURATION_DAYS ?? 30),
+  ghsToNgn: Number(process.env.GHS_TO_NGN ?? 120),
   adminEmail: process.env.ADMIN_EMAIL ?? "admin@system.com",
   adminPassword: process.env.ADMIN_PASSWORD ?? "admin1234",
   moolre: {
@@ -29,6 +30,10 @@ export const config = {
     ),
     publicKey: (process.env.MOOLRE_PUBLIC_KEY || "").replace(/\s/g, ""),
     accountNumber: (process.env.MOOLRE_ACCOUNT_NUMBER || "").replace(/\s/g, ""),
+    ngnAccountNumber: (process.env.MOOLRE_NGN_ACCOUNT_NUMBER || "").replace(
+      /\s/g,
+      ""
+    ),
     webhookSecret: process.env.MOOLRE_WEBHOOK_SECRET ?? "",
     apiKey: process.env.MOOLRE_API_KEY ?? "",
     senderId: (process.env.MOOLRE_SENDER_ID || "Oddnext").replace(

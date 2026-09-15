@@ -1,5 +1,10 @@
+export const GHS_TO_NGN = 120;
+
+export type PayCountry = "GH" | "NG";
+export type PayCurrency = "GHS" | "NGN";
+
 export const SLIP_PRODUCTS = [
-  { id: "odds10", label: "10 odds", priceGhs: 0.5 },
+  { id: "odds10", label: "10 odds", priceGhs: 30 },
   { id: "odds50", label: "50 odds", priceGhs: 80 },
   { id: "odds100", label: "100+ odds", priceGhs: 100 },
   { id: "draw", label: "Draw games", priceGhs: 80 },
@@ -29,6 +34,18 @@ export const PRODUCT_IDS = PRODUCTS.map((item) => item.id) as [
 
 export function getProduct(id: string) {
   return PRODUCTS.find((item) => item.id === id);
+}
+
+export function currencyForCountry(country: PayCountry): PayCurrency {
+  return country === "NG" ? "NGN" : "GHS";
+}
+
+export function amountForCountry(
+  priceGhs: number,
+  country: PayCountry,
+  rate = GHS_TO_NGN
+): number {
+  return country === "NG" ? Math.round(priceGhs * rate) : priceGhs;
 }
 
 export function isSlipProductId(id: string): id is SlipProductId {

@@ -10,26 +10,55 @@ import {
   storePayRef,
   type PaymentVerify,
 } from "@/lib/payments";
-import { looksLikeGhPhone, readSavedPhone, savePhone } from "@/lib/phone";
-import type { ProductId } from "@/lib/products";
+import {
+  detectPayCountry,
+  looksLikePayPhone,
+  readSavedCountry,
+  readSavedPhone,
+  saveCountry,
+  savePhone,
+} from "@/lib/phone";
+import type { PayCountry, ProductId } from "@/lib/products";
 import type { AuthUser } from "@/lib/types";
 
 export function useMoolrePay() {
   const { token, user, applySession, refresh } = useAuth();
   const [busy, setBusy] = useState<ProductId | "">("");
   const [error, setError] = useState("");
-  const [phone, setPhone] = useState("");
+  const [phone, setPhoneValue] = useState("");
+  const [country, setCountryValue] = useState<PayCountry>("GH");
   const [checkout, setCheckout] = useState<CheckoutSession | null>(null);
   const [paid, setPaid] = useState<PaymentVerify | null>(null);
 
   useEffect(() => {
     const saved = readSavedPhone();
+    const savedCountry = readSavedCountry();
     if (saved) {
-      setPhone(saved);
+      setPhoneValue(saved);
+      setCountryValue(detectPayCountry(saved) ?? savedCountry);
       return;
     }
-    if (user?.phone) setPhone(user.phone);
+    setCountryValue(savedCountry);
+    if (user?.phone) {
+      setPhoneValue(user.phone);
+      const detected = detectPayCountry(user.phone);
+      if (detected) setCountryValue(detected);
+    }
   }, [user?.phone]);
+
+  const setPhone = useCallback((value: string) => {
+    setPhoneValue(value);
+    const detected = detectPayCountry(value);
+    if (detected) {
+      setCountryValue(detected);
+      saveCountry(detected);
+    }
+  }, []);
+
+  const setCountry = useCallback((next: PayCountry) => {
+    setCountryValue(next);
+    saveCountry(next);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -40,14 +69,19 @@ export function useMoolrePay() {
 
   const startPay = useCallback(
     async (product: ProductId) => {
-      if (!looksLikeGhPhone(phone)) {
-        setError("Enter the Mobile Money number that will pay. The slip SMS goes there.");
+      if (!looksLikePayPhone(phone, country)) {
+        setError(
+          country === "NG"
+            ? "Enter a valid Nigeria Mobile Money number."
+            : "Enter a valid Ghana Mobile Money number."
+        );
         return;
       }
       setBusy(product);
       setError("");
       setPaid(null);
       savePhone(phone);
+      saveCountry(country);
       try {
         const data = await apiFetch<{
           authorization_url: string;
@@ -60,6 +94,7 @@ export function useMoolrePay() {
           body: JSON.stringify({
             product,
             phone,
+            country,
             returnOrigin: window.location.origin,
           }),
         });
@@ -82,7 +117,7 @@ export function useMoolrePay() {
         setBusy("");
       }
     },
-    [token, applySession, phone]
+    [token, applySession, phone, country]
   );
 
   const handlePaid = useCallback(
@@ -115,6 +150,8 @@ export function useMoolrePay() {
     error,
     phone,
     setPhone,
+    country,
+    setCountry,
     checkout,
     paid,
     startPay,
