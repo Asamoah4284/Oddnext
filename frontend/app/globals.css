@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply min-h-screen bg-paper text-ink antialiased;
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0;
+  word-spacing: 0.08em;
+}
+
+.btn-gold,
+.btn-primary {
+  @apply inline-flex items-center justify-center rounded-full bg-fire px-5 py-2.5 text-sm font-semibold text-pitch-dark transition hover:bg-fire-dark;
+}
+
+.btn-ghost {
+  @apply inline-flex items-center justify-center rounded-full border border-white/15 bg-white/5 px-5 py-2.5 text-sm font-semibold text-cream transition hover:bg-white/10;
+}
+
+.btn-outline {
+  @apply inline-flex items-center justify-center rounded-full border border-line bg-surface px-5 py-2.5 text-sm font-semibold text-ink transition hover:border-mute;
+}
+
+.card {
+  @apply rounded-2xl border border-line bg-surface text-ink shadow-slip;
+}
+
+.field {
+  @apply w-full rounded-xl border border-line bg-paper px-3.5 py-3 text-sm text-ink outline-none placeholder:text-mute focus:border-fire;
+}
+
+.font-display {
+  letter-spacing: 0;
+  word-spacing: 0.08em;
+}
+
+.admin-ui,
+.admin-ui h1,
+.admin-ui h2,
+.admin-ui label,
+.admin-ui button,
+.admin-ui p,
+.admin-ui span,
+.admin-ui input,
+.admin-ui select {
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0;
+  word-spacing: 0.06em;
+}
