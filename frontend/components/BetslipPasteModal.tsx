@@ -108,15 +108,23 @@ export function BetslipPasteModal({
     if (result.bookingCode) {
       setBookingCode(result.bookingCode);
     }
+    const effectiveOdds =
+      result.totalOdds ??
+      (result.items.length > 0 ? calculateCombinedOdds(result.items) : null);
+
     if (result.totalOdds) {
       setTargetOdds(result.totalOdds);
+    } else {
+      setTargetOdds(null);
+    }
 
+    if (effectiveOdds) {
       // Auto-suggest board if not explicitly changed
-      if (result.totalOdds >= 90) {
+      if (effectiveOdds >= 90) {
         setBoard("odds100");
-      } else if (result.totalOdds >= 35) {
+      } else if (effectiveOdds >= 35) {
         setBoard("odds50");
-      } else if (result.totalOdds >= 5) {
+      } else if (effectiveOdds >= 5) {
         setBoard("odds10");
       }
     }
